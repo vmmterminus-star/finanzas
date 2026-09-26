@@ -93,6 +93,12 @@
   .wtile{border-radius:14px;padding:11px 12px;cursor:pointer;min-width:0;}
   .wtile .nm{font-size:11px;font-weight:500;color:#7a6a52;margin-top:8px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
   .wtile .vl{font-size:15px;font-weight:700;}
+  .prow{display:flex;align-items:center;gap:10px;padding:7px 0;border-bottom:0.5px solid #F3ECE1;cursor:pointer;}
+  .prow:last-child{border-bottom:none;}
+  .th{background:var(--bg);border:0.5px solid var(--line);border-radius:8px;display:flex;gap:2px;padding:3px;flex:none;}
+  .th.ts{width:36px;height:36px;} .th.tm{width:74px;height:36px;} .th.tl{width:74px;height:76px;flex-direction:column;}
+  .th .tk{border-radius:3px;flex:1;}
+  .th .tbar{height:3px;background:#9DB77E;border-radius:2px;}
   .ctile{background:var(--card);border:0.5px solid var(--line);border-radius:14px;padding:11px 12px;cursor:pointer;min-width:0;}
 </style>
 </head>
@@ -988,8 +994,10 @@ function openBackup(){
         <div class="row"><div style="min-width:0;"><div style="font-weight:600;font-size:13px;">${s.name}</div><div class="tiny" id="scrInfo_${s.id}">${s.desc}</div></div>
         <button class="btn ghost sm" id="scrBtn_${s.id}" onclick="copyScript('${s.id}')">Copiar</button></div>
         <details style="margin-top:6px;"><summary class="tiny" style="cursor:pointer;color:var(--ink2);">Ver parámetros</summary>
-          <div class="tiny" style="margin:6px 0 5px;">Lo que escribes en "Parameter" del widget (toca para copiar):</div>
-          <div style="display:flex;flex-wrap:wrap;gap:5px;">${s.params.map(p=>`<span class="chip" onclick="copyText('${p}',this)">${p}</span>`).join('')}</div>
+          <div class="tiny" style="margin:6px 0 2px;">Lo que escribes en "Parameter" del widget (toca para copiar):</div>
+          ${s.params.map(p=>`<div class="prow" onclick="copyText('${p.p}',this.querySelector('.pcp'))"><div style="width:74px;flex:none;display:flex;justify-content:center;">${thumbHTML(p.p)}</div>
+            <div style="flex:1;min-width:0;"><div style="font-weight:600;font-size:12px;">${p.p}</div><div class="tiny">${p.size}</div></div>
+            <span class="tiny pcp" style="color:var(--ink2);">copiar</span></div>`).join('')}
         </details></div>`).join('')}
       <div class="tiny" style="margin-top:7px;" id="scrMsg">${syncCode?'El script se copia con tu código de sincronización ya puesto.':'Primero conecta tu código de sincronización (arriba) para que el script lo lleve puesto.'}</div>
     </div>
@@ -1004,8 +1012,30 @@ function openBackup(){
    (en iPhone el portapapeles solo funciona dentro del toque, no después de esperar una descarga). */
 const SCRIPTS=[
   {id:'widgets', name:'Widgets de finanzas', file:'widget-scriptable.js', desc:'8 widgets',
-   params:['gasto','botones','credito','credito chico','me deben','me deben cortes','todo','todo mediano']}
+   params:[{p:'gasto',size:'chico'},{p:'botones',size:'mediano'},{p:'credito',size:'mediano'},{p:'credito chico',size:'chico'},
+     {p:'me deben',size:'chico'},{p:'me deben cortes',size:'chico'},{p:'todo',size:'grande'},{p:'todo mediano',size:'mediano'}]}
 ];
+/* Miniatura simplificada de cada widget (forma real: chico cuadrado, mediano ancho, grande alto) */
+function thumbHTML(p){
+  const k=c=>`<div class="tk" style="background:${c};"></div>`;
+  const tri=cs=>`<div class="tk" style="display:flex;gap:2px;background:none;">${cs.map(k).join('')}</div>`;
+  const CARDS=['#F3D3C5','#E7D4E0','#D9E2EC'], BTNS=['#F3D3C5','#DCE8C8','#FBEFC9'];
+  const bars=`<div class="tbar"></div><div class="tbar"></div><div class="tbar"></div>`;
+  const plus=`<div style="width:14px;height:14px;border-radius:50%;background:var(--ink);"></div>`;
+  const pesos=`<div style="font-size:10px;font-weight:800;color:#5a3720;line-height:1;">$</div>`;
+  const line=`<div style="width:18px;height:2px;background:#7a4a32;border-radius:1px;"></div>`;
+  switch(p){
+    case 'gasto': return `<div class="th ts" style="align-items:center;justify-content:center;">${plus}</div>`;
+    case 'botones': return `<div class="th tm">${BTNS.map(k).join('')}</div>`;
+    case 'credito': return `<div class="th tm">${CARDS.map(k).join('')}</div>`;
+    case 'credito chico': return `<div class="th ts" style="flex-direction:column;justify-content:space-around;padding:5px;">${bars}</div>`;
+    case 'me deben': return `<div class="th ts" style="background:#FCE0D2;align-items:center;justify-content:center;">${pesos}</div>`;
+    case 'me deben cortes': return `<div class="th ts" style="background:#FCE0D2;flex-direction:column;align-items:center;justify-content:center;gap:2px;">${pesos}${line}${line}</div>`;
+    case 'todo': return `<div class="th tl">${tri(CARDS)}${k('#FCE0D2')}${tri(BTNS)}</div>`;
+    case 'todo mediano': return `<div class="th tm"><div class="tk" style="background:none;display:flex;flex-direction:column;justify-content:space-around;padding:2px;gap:0;">${bars}<div style="height:5px;background:#FCE0D2;border-radius:2px;"></div></div><div style="width:16px;background:var(--ink);border-radius:3px;"></div></div>`;
+  }
+  return '';
+}
 const scriptCache={};
 async function loadScript(s){
   try{ const r=await fetch(s.file+'?'+Date.now(),{cache:'no-store'}); if(!r.ok)throw 0;
