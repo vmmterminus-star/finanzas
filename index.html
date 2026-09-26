@@ -982,11 +982,55 @@ function openBackup(){
       <input id="syncCodeInput" value="${syncCode}" placeholder="tu código secreto (inventa uno largo)">
       <div class="row" style="margin-top:8px;"><span class="tiny" id="syncMsg"></span><button class="btn sm" onclick="connectSync(document.getElementById('syncCodeInput').value)">Conectar</button></div>
     </div>
+    <div class="ai-box" style="margin-bottom:14px;">
+      <label>📲 Scripts de Scriptable</label>
+      ${SCRIPTS.map(s=>`<div style="background:#fff;border:0.5px solid var(--line);border-radius:13px;padding:10px 11px;margin-top:6px;">
+        <div class="row"><div style="min-width:0;"><div style="font-weight:600;font-size:13px;">${s.name}</div><div class="tiny" id="scrInfo_${s.id}">${s.desc}</div></div>
+        <button class="btn ghost sm" id="scrBtn_${s.id}" onclick="copyScript('${s.id}')">Copiar</button></div>
+        <details style="margin-top:6px;"><summary class="tiny" style="cursor:pointer;color:var(--ink2);">Ver parámetros</summary>
+          <div class="tiny" style="margin:6px 0 5px;">Lo que escribes en "Parameter" del widget (toca para copiar):</div>
+          <div style="display:flex;flex-wrap:wrap;gap:5px;">${s.params.map(p=>`<span class="chip" onclick="copyText('${p}',this)">${p}</span>`).join('')}</div>
+        </details></div>`).join('')}
+      <div class="tiny" style="margin-top:7px;" id="scrMsg">${syncCode?'El script se copia con tu código de sincronización ya puesto.':'Primero conecta tu código de sincronización (arriba) para que el script lo lleve puesto.'}</div>
+    </div>
     <button class="btn" style="width:100%;margin-bottom:8px;" onclick="exportData()">⤓ Exportar archivo (.json)</button>
     <label class="btn ghost" style="width:100%;text-align:center;display:block;margin-bottom:14px;">⤒ Importar archivo<input type="file" accept="application/json" style="display:none" onchange="importData(event)"></label>
     <div class="field"><label>Código de respaldo (puente Cowork ↔ web)</label><textarea id="codeArea" rows="3" placeholder="Genera aquí tu código, o pega uno para importar"></textarea></div>
     <div class="row" style="gap:6px;margin-bottom:14px;"><button class="btn ghost sm" onclick="exportCode()">Generar</button><button class="btn ghost sm" onclick="copyCode()">Copiar</button><button class="btn sm" onclick="importCode()">Importar código</button></div>
     <button class="btn ghost sm" style="width:100%;color:var(--gasto);border-color:#eed;" onclick="resetAll()">Borrar todo y empezar de cero</button>`);
+  SCRIPTS.forEach(loadScript);
+}
+/* Scripts de Scriptable guardados en el repo. Se bajan al abrir Respaldo para poder copiarlos al instante
+   (en iPhone el portapapeles solo funciona dentro del toque, no después de esperar una descarga). */
+const SCRIPTS=[
+  {id:'widgets', name:'Widgets de finanzas', file:'widget-scriptable.js', desc:'8 widgets',
+   params:['gasto','botones','credito','credito chico','me deben','me deben cortes','todo','todo mediano']}
+];
+const scriptCache={};
+async function loadScript(s){
+  try{ const r=await fetch(s.file+'?'+Date.now(),{cache:'no-store'}); if(!r.ok)throw 0;
+    scriptCache[s.id]=await r.text();
+    const lm=r.headers.get('Last-Modified'); const info=document.getElementById('scrInfo_'+s.id);
+    if(info&&lm) info.textContent=s.desc+' · actualizado '+new Date(lm).toLocaleDateString('es-MX',{day:'numeric',month:'short'});
+  }catch(e){ const info=document.getElementById('scrInfo_'+s.id); if(info)info.textContent='No se pudo bajar (¿sin internet?)'; }
+}
+function copyText(t,el){
+  let ok=false;
+  const ta=document.createElement('textarea'); ta.value=t; ta.setAttribute('readonly',''); ta.style.cssText='position:fixed;top:0;left:0;opacity:0;';
+  document.body.appendChild(ta); ta.select(); ta.setSelectionRange(0,t.length);
+  try{ ok=document.execCommand('copy'); }catch(e){}
+  ta.remove();
+  const done=good=>{ if(!el)return; const old=el.textContent; el.textContent=good?'✓ Copiado':'No se pudo'; setTimeout(()=>el.textContent=old,1500); };
+  if(ok) done(true);
+  else if(navigator.clipboard) navigator.clipboard.writeText(t).then(()=>done(true)).catch(()=>done(false));
+  else done(false);
+}
+function copyScript(id){
+  const txt=scriptCache[id]; const msg=document.getElementById('scrMsg');
+  if(!txt){ if(msg)msg.textContent='Todavía se está bajando, intenta en un segundo.'; return; }
+  const out=syncCode?txt.replace('"PON_AQUI_TU_CODIGO"',JSON.stringify(syncCode)):txt;
+  copyText(out,document.getElementById('scrBtn_'+id));
+  if(msg) msg.textContent=syncCode?'Listo. Abre Scriptable, toca + y pega.':'Copiado, pero sin tu código: conéctalo arriba o escríbelo en la línea PON_AQUI_TU_CODIGO.';
 }
 function exportData(){
   const blob=new Blob([JSON.stringify(S,null,2)],{type:'application/json'});
