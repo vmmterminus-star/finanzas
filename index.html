@@ -384,8 +384,18 @@ const nowISO=()=>new Date().toISOString();
 function setSyncMsg(t){ const e=document.getElementById('syncMsg'); if(e)e.textContent=t; }
 function schedulePush(){ if(!syncCode)return; clearTimeout(pushTimer); pushTimer=setTimeout(cloudPush,1500); }
 async function cloudPush(){ if(!syncCode)return; try{ const ts=nowISO();
-  await fetch(SUPA_URL+"/rest/v1/finanzas_sync?on_conflict=code",{method:"POST",headers:Object.assign({},SUPA_HDR,{Prefer:"resolution=merge-duplicates"}),body:JSON.stringify([{code:syncCode,data:{finz_v1:localStorage.getItem('finz_v1')},updated_at:ts}])});
+  await fetch(SUPA_URL+"/rest/v1/finanzas_sync?on_conflict=code",{method:"POST",headers:Object.assign({},SUPA_HDR,{Prefer:"resolution=merge-duplicates"}),body:JSON.stringify([{code:syncCode,data:{finz_v1:localStorage.getItem('finz_v1')},updated_at:ts},{code:syncCode+'__widget',data:widgetBlob(),updated_at:ts}])});
   localStorage.setItem('finz_remote_ts',ts); }catch(e){} }
+/* Resumen masticado para el widget de iPhone (Scriptable). Solo agregar campos, nunca quitar ni renombrar. */
+function widgetBlob(){
+  const css=getComputedStyle(document.documentElement);
+  const hex=v=>{ const m=/var\((--[^)]+)\)/.exec(v||''); return m?css.getPropertyValue(m[1]).trim():(v||'#EFE7DA'); };
+  const cards=S.cards.map(c=>({n:c.id, lim:+c.limit||0, disp:Math.max(0,(+c.limit||0)-cardDebt(c)), bg:hex(c.color), tx:CARD_INK[c.id]||'#7a5a4a'}));
+  const RD=meDebenCalc(); const falta=RD.keys.reduce((a,k)=>a+RD.stmts[k].falta,0);
+  return {v:1, ts:nowISO(), cards, md:{falta, cerrado:RD.A.falta, corriendo:RD.B.falta}};
+}
+async function pushWidget(){ if(!syncCode)return; try{
+  await fetch(SUPA_URL+"/rest/v1/finanzas_sync?on_conflict=code",{method:"POST",headers:Object.assign({},SUPA_HDR,{Prefer:"resolution=merge-duplicates"}),body:JSON.stringify([{code:syncCode+'__widget',data:widgetBlob(),updated_at:nowISO()}])}); }catch(e){} }
 async function cloudPull(){ if(!syncCode)return; try{
   const r=await fetch(SUPA_URL+"/rest/v1/finanzas_sync?code=eq."+encodeURIComponent(syncCode)+"&select=data,updated_at",{headers:SUPA_HDR});
   const rows=await r.json(); if(!rows||!rows.length)return; const remote=rows[0];
@@ -1370,11 +1380,11 @@ function renderCredito(){
     <details><summary style="cursor:pointer;font-weight:500;font-size:13px;color:var(--ink2);">Compras a meses del periodo (${msiItems.length})</summary><div style="margin-top:8px;">${msiList}</div></details>
     <div class="tiny" style="margin-top:8px;color:var(--ink3);">No se resta de tu dinero real · solo referencia de lo que compraste a crédito.</div>`;
 }
+const CARD_INK={'Klar':'#7a4a32','Liverpool':'#6a4460','Plata Card':'#3f5670'};
 function renderDisponible(){
   const el=document.getElementById('dDisp'); if(!el)return;
-  const ink={'Klar':'#7a4a32','Liverpool':'#6a4460','Plata Card':'#3f5670'};
   el.innerHTML=S.cards.map(c=>{
-    const k=ink[c.id]||'#7a5a4a'; const lim=+c.limit||0; const dd=cardDebt(c);
+    const k=CARD_INK[c.id]||'#7a5a4a'; const lim=+c.limit||0; const dd=cardDebt(c);
     const tile=`background:${c.color};border-radius:14px;padding:10px 9px;cursor:pointer;min-width:0;`;
     const nm=`<div style="font-size:11px;font-weight:500;color:${k};white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${c.id}</div>`;
     if(!lim) return `<div style="${tile}" onclick="openReconcile('${c.id}')">${nm}<div style="font-size:12px;font-weight:600;color:${k};margin-top:4px;">Pon tu límite</div></div>`;
@@ -1887,7 +1897,17 @@ function cleanupMsiBackfill(){
 }
 cleanupMsiBackfill();
 nav('inicio'); render();
-if(syncCode){ cloudPull(); setInterval(cloudPull,20000); }
+// Botones del widget: ?nuevo=gasto|ingreso|transfer abre la hoja de nuevo movimiento.
+// Primero jala lo último de la nube (si hay algo nuevo, cloudPull recarga y la URL conserva ?nuevo).
+(async()=>{
+  const nuevo=new URLSearchParams(location.search).get('nuevo');
+  if(syncCode) await Promise.race([cloudPull(), new Promise(r=>setTimeout(r,4000))]);
+  if(['gasto','ingreso','transfer'].includes(nuevo)){
+    history.replaceState(null,'',location.pathname);
+    openMov({type:nuevo,amount:'',wallet:'Klar',cat:'Otros',note:''});
+  }
+  if(syncCode){ pushWidget(); setInterval(cloudPull,20000); }
+})();
 </script>
 </body>
 </html>
