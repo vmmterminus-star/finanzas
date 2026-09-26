@@ -120,6 +120,9 @@
     <div class="card" style="margin-top:8px;"><div class="row"><span class="tiny" style="font-weight:500;">Gastado esta quincena</span><h3 id="dGastadoQ" style="font-size:19px;color:var(--gasto);">$0</h3></div></div>
 
 
+    <div class="sectionTitle">Crédito disponible</div>
+    <div id="dDisp" style="display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px;"></div>
+
     <div class="sectionTitle">💳 Compras a crédito</div>
     <div class="card" id="dCredito"></div>
 
@@ -1367,6 +1370,22 @@ function renderCredito(){
     <details><summary style="cursor:pointer;font-weight:500;font-size:13px;color:var(--ink2);">Compras a meses del periodo (${msiItems.length})</summary><div style="margin-top:8px;">${msiList}</div></details>
     <div class="tiny" style="margin-top:8px;color:var(--ink3);">No se resta de tu dinero real · solo referencia de lo que compraste a crédito.</div>`;
 }
+function renderDisponible(){
+  const el=document.getElementById('dDisp'); if(!el)return;
+  const ink={'Klar':'#7a4a32','Liverpool':'#6a4460','Plata Card':'#3f5670'};
+  el.innerHTML=S.cards.map(c=>{
+    const k=ink[c.id]||'#7a5a4a'; const lim=+c.limit||0; const dd=cardDebt(c);
+    const tile=`background:${c.color};border-radius:14px;padding:10px 9px;cursor:pointer;min-width:0;`;
+    const nm=`<div style="font-size:11px;font-weight:500;color:${k};white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${c.id}</div>`;
+    if(!lim) return `<div style="${tile}" onclick="openReconcile('${c.id}')">${nm}<div style="font-size:12px;font-weight:600;color:${k};margin-top:4px;">Pon tu límite</div></div>`;
+    const disp=Math.max(0,lim-dd); const used=Math.min(100,Math.max(0,Math.round(dd/lim*100)));
+    return `<div style="${tile}" onclick="openCardDetail('${c.id}')">${nm}
+      <div style="font-size:15px;font-weight:700;margin:2px 0 6px;">${fmt0(disp)}</div>
+      <div style="height:6px;background:rgba(255,255,255,.55);border-radius:4px;overflow:hidden;display:flex;">
+        <div style="width:${used}%;background:#E7917F;"></div><div style="flex:1;background:#9DB77E;"></div></div>
+      <div style="font-size:10px;color:${k};margin-top:3px;">de ${fmt0(lim)}</div></div>`;
+  }).join('');
+}
 function renderDash(){
   const net=S.wallets.reduce((a,w)=>a+w.bal,0);
   document.getElementById('dNet').textContent=fmt(net);
@@ -1385,6 +1404,7 @@ function renderDash(){
     spentEl.style.width=pct+'%'; leftEl.style.width=(100-pct)+'%';
     gEl.textContent='gastado '+fmt0(gastadoDesde)+' (incl. cuotas)'; tEl.textContent='de '+fmt0(lp.amount); }
   else { qEl.textContent='—'; spentEl.style.width='0%'; leftEl.style.width='100%'; gEl.textContent='marca tu quincena'; tEl.textContent=''; }
+  renderDisponible();
   renderCredito();
   const RD=meDebenCalc(); const totalFalta=RD.keys.reduce((a,k)=>a+RD.stmts[k].falta,0); const faltaA=RD.A.falta, faltaB=RD.B.falta;
   const de=document.getElementById('dReponer');
