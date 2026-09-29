@@ -70,7 +70,7 @@ async function traer() {
   r.headers = { apikey: SUPA_KEY, Authorization: "Bearer " + SUPA_KEY };
   r.timeoutInterval = 12;
   const j = await r.loadJSON();
-  if (!j || !j.length) throw new Error("sin datos");
+  if (!j || !j.length) throw new Error("código " + CODE + " sin datos");
   const d = j[0].data;
   const blob = typeof d === "string" ? JSON.parse(d) : d;
   blob._ts = j[0].updated_at || blob.ts;
@@ -83,7 +83,7 @@ async function datos() {
   catch (e) {
     if (fm.fileExists(CACHE)) {
       const b = JSON.parse(fm.readString(CACHE));
-      b._viejo = true;
+      b._viejo = String(e && e.message || "sin conexión").slice(0, 40);
       return b;
     }
     return null;
@@ -104,6 +104,7 @@ function hace(iso) {
   if (h < 24) return "hace " + h + " h";
   return "hace " + Math.floor(h / 24) + " d";
 }
+function cuando(blob) { return blob._viejo ? blob._viejo + " · " + hace(blob._ts) : hace(blob._ts); }
 function texto(cont, t, font, color) {
   const x = cont.addText(t);
   x.font = font; x.textColor = color || TXT; x.lineLimit = 1;
@@ -127,7 +128,7 @@ function barra(cont, ancho, disp, lim, pista) {
 function pie(w, blob) {
   const f = w.addStack();
   f.addSpacer();
-  texto(f, hace(blob._ts), f_mini, blob._viejo ? new Color("#CC6F52") : TXT2);
+  texto(f, cuando(blob), f_mini, blob._viejo ? new Color("#CC6F52") : TXT2);
 }
 
 function vacio(w, msg) {
@@ -260,7 +261,7 @@ function vMeDeben(w, blob, cortes) {
     texto(w, md.falta > 0 ? "te falta que te repongan" : "no te deben nada", f_mini, MD_TX);
   }
   w.addSpacer();
-  const f = w.addStack(); texto(f, hace(blob._ts), f_mini, blob._viejo ? new Color("#CC6F52") : MD_TX);
+  const f = w.addStack(); texto(f, cuando(blob), f_mini, blob._viejo ? new Color("#CC6F52") : MD_TX);
 }
 
 function vTodo(w, blob) {
@@ -268,7 +269,7 @@ function vTodo(w, blob) {
   const ancho = ANCHO - PAD_X * 2;
   const h = w.addStack(); h.centerAlignContent();
   texto(h, "Mis finanzas", f_tit); h.addSpacer();
-  texto(h, hace(blob._ts), f_mini, blob._viejo ? new Color("#CC6F52") : TXT2);
+  texto(h, cuando(blob), f_mini, blob._viejo ? new Color("#CC6F52") : TXT2);
   w.addSpacer(8);
   texto(w, "Crédito disponible", f_mini, TXT2);
   w.addSpacer(4);
