@@ -93,6 +93,11 @@
   .wtile{border-radius:14px;padding:11px 12px;cursor:pointer;min-width:0;}
   .wtile .nm{font-size:11px;font-weight:500;color:#7a6a52;margin-top:8px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
   .wtile .vl{font-size:15px;font-weight:700;}
+  .brow{background:var(--card);border:0.5px solid var(--line);border-radius:13px;padding:8px;margin-bottom:6px;}
+  .brow input,.brow select{padding:8px 9px;}
+  .bic{border:0.5px solid var(--line);background:#fff;border-radius:10px;font-size:15px;padding:0;}
+  .bic.on{background:#FBEFC9;border-color:#E8D49A;}
+  .bmsi{background:#FBEFC9;border-radius:10px;padding:6px 8px;margin-top:5px;display:flex;align-items:center;gap:6px;flex-wrap:wrap;font-size:12px;color:#6a5220;}
   .prow{display:flex;align-items:center;gap:10px;padding:7px 0;border-bottom:0.5px solid #F3ECE1;cursor:pointer;}
   .prow:last-child{border-bottom:none;}
   .th{background:var(--bg);border:0.5px solid var(--line);border-radius:8px;display:flex;gap:2px;padding:3px;flex:none;}
@@ -109,7 +114,7 @@
   <section id="view-inicio">
     <div class="row" style="margin-bottom:14px;">
       <div><div class="tiny">Hola Valen</div><h3 id="dashDate" style="font-size:15px;"></h3></div>
-      <button class="btn ghost sm" onclick="openBackup()"><i class="ti">⤓</i> Respaldo</button>
+      <button class="btn ghost sm" onclick="openAjustes()"><i class="ti">⚙</i> Ajustes</button>
     </div>
     <div class="hero">
       <div class="tiny" style="color:#7a4a32;">Mi dinero real</div>
@@ -132,7 +137,7 @@
     <div class="sectionTitle">💳 Compras a crédito</div>
     <div class="card" id="dCredito"></div>
 
-    <div class="sectionTitle">Próximos pagos</div>
+    <div class="sectionTitle">💳 Pago del mes</div>
     <div class="card" id="dPagos"></div>
 
     <div class="sectionTitle">En qué gastas más este mes</div>
@@ -154,7 +159,7 @@
   <section id="view-resumen" class="hidden">
     <div class="row" style="margin-bottom:14px;">
       <div><div class="tiny">Detalle</div><h3 id="todayLbl" style="font-size:15px;">Carteras</h3></div>
-      <button class="btn ghost sm" onclick="openBackup()"><i class="ti">⤓</i> Respaldo</button>
+      <button class="btn ghost sm" onclick="openAjustes()"><i class="ti">⚙</i> Ajustes</button>
     </div>
     <div class="hero">
       <div class="tiny" style="color:#7a4a32;">Mi dinero real</div>
@@ -442,6 +447,20 @@ const CATS=CATGROUPS.flatMap(x=>x.subs);
 const SUB_GROUP={}; CATGROUPS.forEach(x=>x.subs.forEach(s=>SUB_GROUP[s]=x.g));
 // alias para categorías viejas
 SUB_GROUP['Transporte']='Transporte'; SUB_GROUP['Entretenimiento']='Social'; SUB_GROUP['Educación']='Educación'; SUB_GROUP['Salud']='Salud'; SUB_GROUP['Social / salidas']='Social';
+/* Categorías editables: si S.catgroups existe, reemplaza a las de fábrica (se modifican en sitio porque son const). */
+const DEFAULT_CATGROUPS=structuredClone(CATGROUPS);
+const PROTECTED_SUBS=['Quincena','Reposición']; // la app depende de estos nombres
+function isProtectedSub(s){ return PROTECTED_SUBS.includes(s) || s==='Otros' || /^Otros \(/.test(s); }
+function applyCats(){
+  const src=(S.catgroups&&S.catgroups.length)?S.catgroups:DEFAULT_CATGROUPS;
+  CATGROUPS.splice(0,CATGROUPS.length,...structuredClone(src));
+  Object.keys(SUB_GROUP).forEach(k=>delete SUB_GROUP[k]);
+  CATGROUPS.forEach(x=>x.subs.forEach(s=>SUB_GROUP[s]=x.g));
+  ['Transporte','Educación','Salud'].forEach(a=>{ if(!SUB_GROUP[a]&&CATGROUPS.some(x=>x.g===a)) SUB_GROUP[a]=a; });
+  if(!SUB_GROUP['Entretenimiento']) SUB_GROUP['Entretenimiento']='Social'; if(!SUB_GROUP['Social / salidas']) SUB_GROUP['Social / salidas']='Social';
+  Object.assign(CAT_ICON, S.caticons||{});
+}
+applyCats();
 function groupOf(cat){ return SUB_GROUP[cat] || 'Dinero y otros'; }
 function groupIcon(g){ return (CATGROUPS.find(x=>x.g===g)||{}).icon||'•'; }
 function groupOptions(sel){ return CATGROUPS.map(x=>`<option value="${x.g}" ${x.g===sel?'selected':''}>${x.icon} ${x.g}</option>`).join(''); }
@@ -524,7 +543,7 @@ function walletOptions(sel,includeCards){
 
 function openMov(pre){
   pre=pre||{type:'gasto',amount:'',wallet:'Klar',cat:'Otros',note:''};
-  sheet(`<h3>Nuevo movimiento</h3>
+  sheet(`<div class="row" style="margin-bottom:12px;"><h3 style="margin:0;">Nuevo movimiento</h3><button class="btn ghost sm" onclick="openBatch()">＋ Varios gastos</button></div>
     <div class="seg" id="mt" style="margin-bottom:12px;">
       <button class="${pre.type==='gasto'?'on':''}" onclick="setMt('gasto')">Gasto</button>
       <button class="${pre.type==='ingreso'?'on':''}" onclick="setMt('ingreso')">Ingreso</button>
@@ -556,6 +575,60 @@ function setMt(t){
   const mw=document.getElementById('mMesesWrap'); if(mw)mw.classList.toggle('hidden',t!=='gasto');
   const rw=document.getElementById('mReponerWrap'); if(rw)rw.classList.toggle('hidden',t!=='gasto');
   document.getElementById('mWalletLbl').textContent = t==='transfer'?'Desde':(t==='ingreso'?'A cartera':'Cartera');
+}
+/* ---------- Lista rápida: varios gastos de un jalón (misma cartera y fecha) ----------
+   La categoría siempre la elige ella (nunca se adivina). 📅 solo aparece si la cartera es tarjeta. */
+let batchRows=[];
+const newBatchRow=()=>({amt:'',note:'',cat:'',msi:false,months:3,monthly:'',rep:false});
+function isCardWallet(w){ return S.cards.some(c=>c.id===w); }
+function openBatch(){
+  batchRows=[newBatchRow(),newBatchRow(),newBatchRow()];
+  sheet(`<h3>Varios gastos</h3>
+    <div class="grid2"><div class="field"><label>Cartera</label><select id="bWallet" onchange="batchRender()">${walletOptions('Klar',true)}</select></div>
+    <div class="field"><label>Fecha</label><input id="bDate" type="date" value="${todayISO()}"></div></div>
+    <div id="bRows"></div>
+    <button class="btn ghost sm" style="width:100%;margin:2px 0 10px;" onclick="batchAdd()">+ renglón</button>
+    <div class="tiny" id="bMsg" style="color:var(--gasto);margin-bottom:6px;"></div>
+    <div class="row"><button class="btn ghost" onclick="closeSheet()">Cancelar</button><button class="btn" id="bSave" onclick="batchSave()">Guardar</button></div>`);
+  batchRender();
+}
+function batchRender(){
+  const card=isCardWallet(document.getElementById('bWallet').value);
+  document.getElementById('bRows').innerHTML=batchRows.map((r,i)=>`<div class="brow">
+    <div style="display:grid;grid-template-columns:84px minmax(0,1fr) 38px 38px;gap:5px;">
+      <input type="number" step="0.01" inputmode="decimal" placeholder="$" value="${r.amt}" oninput="batchSet(${i},'amt',this.value)">
+      <input placeholder="nota" value="${r.note.replace(/"/g,'&quot;')}" oninput="batchSet(${i},'note',this.value)">
+      <button class="bic ${r.rep?'on':''}" title="Me lo reponen" onclick="batchToggle(${i},'rep')">↩</button>
+      <button class="bic ${r.msi&&card?'on':''}" title="A meses" ${card?'':'style="visibility:hidden;"'} onclick="batchToggle(${i},'msi')">📅</button>
+    </div>
+    <select style="margin-top:5px;" onchange="batchSet(${i},'cat',this.value)"><option value="">Categoría…</option>${catOptionsHTML(null,r.cat)}</select>
+    ${r.msi&&card?`<div class="bmsi">a <select style="width:auto;padding:4px 8px;" onchange="batchSet(${i},'months',+this.value)">${[3,6,9,12,18,24].map(n=>`<option ${n===r.months?'selected':''}>${n}</option>`).join('')}</select> meses ·
+      <input id="bMon${i}" type="number" step="0.01" inputmode="decimal" style="width:96px;padding:4px 8px;" value="${r.monthly}" placeholder="${batchAuto(r)}" oninput="batchSet(${i},'monthly',this.value)"> /mes · sin int.</div>`:''}
+  </div>`).join('');
+  batchTotal();
+}
+function batchAuto(r){ const a=parseFloat(r.amt); return a>0?(Math.round(a/(+r.months||3)*100)/100).toFixed(2):'auto'; }
+function batchSet(i,k,v){ batchRows[i][k]=v; if(k==='amt'||k==='months'){ const e=document.getElementById('bMon'+i); if(e) e.placeholder=batchAuto(batchRows[i]); } if(k==='amt') batchTotal(); }
+function batchToggle(i,k){ batchRows[i][k]=!batchRows[i][k]; batchRender(); }
+function batchAdd(){ batchRows.push(newBatchRow()); batchRender(); }
+function batchTotal(){ const rows=batchRows.filter(r=>parseFloat(r.amt)>0); const t=rows.reduce((a,r)=>a+parseFloat(r.amt),0);
+  const b=document.getElementById('bSave'); if(b) b.textContent=rows.length?('Guardar '+rows.length+' · '+fmt(t)):'Guardar'; }
+function batchSave(){
+  const wallet=document.getElementById('bWallet').value, date=document.getElementById('bDate').value||todayISO();
+  const card=isCardWallet(wallet); const msg=t=>{ document.getElementById('bMsg').textContent=t; };
+  const rows=batchRows.filter(r=>parseFloat(r.amt)>0);
+  if(!rows.length) return msg('Escribe al menos un monto.');
+  const sinCat=rows.find(r=>!r.cat); if(sinCat) return msg('Falta elegir la categoría del renglón '+(batchRows.indexOf(sinCat)+1)+'.');
+  snapshot();
+  rows.forEach(r=>{
+    const amt=Math.round(parseFloat(r.amt)*100)/100;
+    const m={id:uid(),type:'gasto',amount:amt,date,wallet,note:r.note,cat:r.cat}; if(r.rep) m.reponer=true;
+    if(r.msi&&card){ const months=+r.months||3; const monthly=parseFloat(r.monthly)||Math.round(amt/months*100)/100;
+      const it={id:uid(),producto:r.note||'Compra',card:wallet,interes:'sin',total:amt,monthly,months,paid:0,purchase:date,start:firstChargeFor(date,wallet),sources:{},movId:m.id};
+      S.msi.push(it); m.msiId=it.id; m.note=(r.note||'Compra')+' (a '+months+' meses)'; }
+    applyDelta(wallet,-amt); S.movements.unshift(m);
+  });
+  closeSheet(); save();
 }
 // Casilla "Es reposición" de los ingresos: solo es un atajo a la categoría Dinero y otros → Reposición (lo que guarda es la categoría)
 function repIngToggle(on){
@@ -738,8 +811,8 @@ function editMsi(id){
       <div class="field"><label>Interés</label><select id="emInt"><option value="sin" ${m.interes==='sin'?'selected':''}>Sin intereses</option><option value="con" ${m.interes==='con'?'selected':''}>Con intereses</option></select></div>
     </div>
     <div class="grid2">
-      <div class="field"><label>Total</label><input id="emTotal" type="number" value="${m.total||''}"></div>
-      <div class="field"><label>Mensualidad</label><input id="emMonthly" type="number" value="${m.monthly}"></div>
+      <div class="field"><label>Total</label><input id="emTotal" type="number" step="0.01" inputmode="decimal" value="${m.total||''}"></div>
+      <div class="field"><label>Mensualidad</label><input id="emMonthly" type="number" step="0.01" inputmode="decimal" value="${m.monthly}"></div>
     </div>
     <div class="grid2">
       <div class="field"><label># de meses</label><input id="emMonths" type="number" value="${m.months}"></div>
@@ -990,16 +1063,19 @@ function perQuinCommit(){
 }
 
 /* ---------- Backup ---------- */
-function openBackup(){
-  sheet(`<h3>Respaldo y sincronización</h3>
+/* ⚙ Ajustes: menú con tres pantallas (sincronizar y respaldo · categorías · scripts) */
+function openAjustes(){
+  const row=(icon,txt,fn)=>`<div class="card" style="margin-bottom:8px;cursor:pointer;" onclick="${fn}"><div class="row"><span style="font-weight:500;">${icon} ${txt}</span><span class="tiny" style="font-size:16px;">›</span></div></div>`;
+  sheet(`<h3>⚙ Ajustes</h3>
+    ${row('📱','Sincronizar y respaldo','openBackup()')}
+    ${row('🏷','Categorías','openCats()')}
+    ${row('📲','Scripts de Scriptable','openScripts()')}
+    <button class="btn ghost" style="width:100%;margin-top:6px;" onclick="closeSheet()">Cerrar</button>`);
+}
+const backToAjustes=`<button class="btn ghost sm" style="margin-bottom:10px;" onclick="openAjustes()">‹ Ajustes</button>`;
+function openScripts(){
+  sheet(`${backToAjustes}<h3>📲 Scripts de Scriptable</h3>
     <div class="ai-box" style="margin-bottom:14px;">
-      <label>📱 Sincronizar entre dispositivos</label>
-      <div class="tiny" style="margin-bottom:6px;">Pon el mismo código secreto en tu compu y tu cel para que se sincronicen. Funciona en la versión web (Netlify), no aquí dentro de Cowork.</div>
-      <input id="syncCodeInput" value="${syncCode}" placeholder="tu código secreto (inventa uno largo)">
-      <div class="row" style="margin-top:8px;"><span class="tiny" id="syncMsg"></span><button class="btn sm" onclick="connectSync(document.getElementById('syncCodeInput').value)">Conectar</button></div>
-    </div>
-    <div class="ai-box" style="margin-bottom:14px;">
-      <label>📲 Scripts de Scriptable</label>
       ${SCRIPTS.map(s=>`<div style="background:#fff;border:0.5px solid var(--line);border-radius:13px;padding:10px 11px;margin-top:6px;">
         <div class="row"><div style="min-width:0;"><div style="font-weight:600;font-size:13px;">${s.name}</div><div class="tiny" id="scrInfo_${s.id}">${s.desc}</div></div>
         <button class="btn ghost sm" id="scrBtn_${s.id}" onclick="copyScript('${s.id}')">Copiar</button></div>
@@ -1009,14 +1085,109 @@ function openBackup(){
             <div style="flex:1;min-width:0;"><div style="font-weight:600;font-size:12px;">${p.p}</div><div class="tiny">${p.size}</div></div>
             <span class="tiny pcp" style="color:var(--ink2);">copiar</span></div>`).join('')}
         </details></div>`).join('')}
-      <div class="tiny" style="margin-top:7px;" id="scrMsg">${syncCode?'El script se copia con tu código de sincronización ya puesto.':'Primero conecta tu código de sincronización (arriba) para que el script lo lleve puesto.'}</div>
+      <div class="tiny" style="margin-top:7px;" id="scrMsg">${syncCode?'El script se copia con tu código de sincronización ya puesto.':'Primero conecta tu código de sincronización (en Sincronizar y respaldo) para que el script lo lleve puesto.'}</div>
+    </div>`);
+  SCRIPTS.forEach(loadScript);
+}
+/* ---------- Editor de categorías (⚙ Ajustes) ---------- */
+function catsEditable(){ if(!S.catgroups||!S.catgroups.length) S.catgroups=structuredClone(CATGROUPS); return S.catgroups; }
+function catUseCount(s){ return S.movements.filter(m=>m.cat===s).length+(S.fixed||[]).filter(f=>f.cat===s).length; }
+function otrosOf(g){ return g.subs.find(x=>x==='Otros'||/^Otros \(/.test(x))||g.subs[g.subs.length-1]; }
+// renombra en todo lo guardado: movimientos, gastos fijos y análisis guardados
+function renameCatRefs(oldName,newName){
+  S.movements.forEach(m=>{ if(m.cat===oldName) m.cat=newName; });
+  (S.fixed||[]).forEach(f=>{ if(f.cat===oldName) f.cat=newName; });
+  (S.analyses||[]).forEach(a=>{ if(a.config&&Array.isArray(a.config.sel)) a.config.sel=a.config.sel.map(x=>x===oldName?newName:x); });
+  anaState.sel=anaState.sel.map(x=>x===oldName?newName:x);
+}
+function catOptionsHTML(exclude,sel){ return CATGROUPS.map(g=>`<optgroup label="${g.icon} ${g.g}">`+g.subs.filter(s=>s!==exclude).map(s=>`<option value="${s}" ${s===sel?'selected':''}>${(CAT_ICON[s]||'•')+' '+subLabel(s)}</option>`).join('')+'</optgroup>').join(''); }
+const backToCats=`<button class="btn ghost sm" style="margin-bottom:10px;" onclick="openCats()">‹ Categorías</button>`;
+function openCats(){
+  sheet(`${backToAjustes}<h3>🏷 Categorías</h3>
+    <div class="tiny" style="margin-bottom:10px;">Toca una para renombrarla o quitarla. Las que tienen 🔒 las usa la app y no se pueden cambiar.</div>
+    ${CATGROUPS.map((g,gi)=>`<div class="card" style="margin-bottom:8px;">
+      <div class="row"><b>${g.icon} ${g.g}</b><button style="background:none;border:none;color:var(--ink2);font-size:14px;" onclick="openCatGroup(${gi})">✎</button></div>
+      <div style="display:flex;flex-wrap:wrap;gap:5px;margin-top:7px;">
+        ${g.subs.map((s,si)=>isProtectedSub(s)?`<span class="chip" style="cursor:default;">${CAT_ICON[s]||'•'} ${subLabel(s)} 🔒</span>`:`<span class="chip" onclick="openCatSub(${gi},${si})">${CAT_ICON[s]||'•'} ${s}</span>`).join('')}
+        <span class="chip" style="border-style:dashed;" onclick="openCatSub(${gi},-1)">+ agregar</span>
+      </div></div>`).join('')}
+    <button class="btn ghost" style="width:100%;" onclick="openCatGroup(-1)">+ Grupo nuevo</button>`);
+}
+function openCatSub(gi,si){
+  const g=CATGROUPS[gi]; const isNew=si<0; const s=isNew?'':g.subs[si]; const n=isNew?0:catUseCount(s);
+  sheet(`${backToCats}<h3>${isNew?'Nueva en '+g.g:'Editar '+s}</h3>
+    <div class="grid2" style="grid-template-columns:72px 1fr;"><div class="field"><label>Ícono</label><input id="csIcon" value="${isNew?'':(CAT_ICON[s]||'')}" maxlength="4" placeholder="🙂"></div>
+    <div class="field"><label>Nombre</label><input id="csName" value="${s.replace(/"/g,'&quot;')}"></div></div>
+    ${n?`<div class="tiny" style="margin:-4px 2px 10px;">La usan ${n} movimiento(s). Si la renombras, se cambian también.</div>`:''}
+    <div class="tiny" id="csMsg" style="color:var(--gasto);margin-bottom:6px;"></div>
+    <div class="row"><button class="btn ghost" onclick="openCats()">Cancelar</button><button class="btn" onclick="saveCatSub(${gi},${si})">Guardar</button></div>
+    ${isNew?'':`<div class="card" style="margin-top:14px;"><div style="font-weight:500;margin-bottom:6px;">Quitar categoría</div>
+      ${n?`<div class="field"><label>Pasar sus ${n} movimiento(s) a</label><select id="csMove">${catOptionsHTML(s,otrosOf(g))}</select></div>`:''}
+      <button class="btn ghost sm" style="width:100%;color:var(--gasto);" onclick="delCatSub(${gi},${si})">Quitar ${s}</button></div>`}`);
+}
+function saveCatSub(gi,si){
+  const name=document.getElementById('csName').value.trim(), icon=document.getElementById('csIcon').value.trim();
+  const msg=t=>{ document.getElementById('csMsg').textContent=t; };
+  if(!name) return msg('Ponle un nombre.');
+  const cg=catsEditable(); const g=cg[gi]; const old=si<0?null:g.subs[si];
+  if(name!==old && cg.some(x=>x.subs.includes(name))) return msg('Ya existe una categoría con ese nombre.');
+  snapshot();
+  if(old===null){ const oi=g.subs.indexOf(otrosOf(g)); g.subs.splice(oi<0?g.subs.length:oi,0,name); } // antes de "Otros"
+  else if(name!==old){ g.subs[si]=name; renameCatRefs(old,name); }
+  S.caticons=S.caticons||{};
+  if(icon) S.caticons[name]=icon; else if(old&&CAT_ICON[old]) S.caticons[name]=CAT_ICON[old];
+  save(); openCats();
+}
+function delCatSub(gi,si){
+  const cg=catsEditable(); const g=cg[gi]; const s=g.subs[si]; if(isProtectedSub(s))return;
+  const mv=document.getElementById('csMove');
+  snapshot(); if(mv) renameCatRefs(s,mv.value); g.subs.splice(si,1); save(); openCats();
+}
+function openCatGroup(gi){
+  const isNew=gi<0; const g=isNew?{g:'',icon:'',subs:[]}:CATGROUPS[gi];
+  const used=g.subs.reduce((a,s)=>a+catUseCount(s),0);
+  const locked=g.subs.some(s=>PROTECTED_SUBS.includes(s));
+  const others=CATGROUPS.filter((x,i)=>i!==gi).map(x=>`<optgroup label="${x.icon} ${x.g}">`+x.subs.map(s=>`<option value="${s}">${(CAT_ICON[s]||'•')+' '+subLabel(s)}</option>`).join('')+'</optgroup>').join('');
+  sheet(`${backToCats}<h3>${isNew?'Grupo nuevo':'Editar grupo'}</h3>
+    <div class="grid2" style="grid-template-columns:72px 1fr;"><div class="field"><label>Ícono</label><input id="cgIcon" value="${g.icon}" maxlength="4" placeholder="🙂"></div>
+    <div class="field"><label>Nombre</label><input id="cgName" value="${g.g.replace(/"/g,'&quot;')}"></div></div>
+    <div class="tiny" id="cgMsg" style="color:var(--gasto);margin-bottom:6px;"></div>
+    <div class="row"><button class="btn ghost" onclick="openCats()">Cancelar</button><button class="btn" onclick="saveCatGroup(${gi})">Guardar</button></div>
+    ${(!isNew&&!locked)?`<div class="card" style="margin-top:14px;"><div style="font-weight:500;margin-bottom:6px;">Quitar grupo</div>
+      ${used?`<div class="field"><label>Pasar sus ${used} movimiento(s) a</label><select id="cgMove">${others}</select></div>`:''}
+      <button class="btn ghost sm" style="width:100%;color:var(--gasto);" onclick="delCatGroup(${gi})">Quitar ${g.g}</button></div>`:''}`);
+}
+function saveCatGroup(gi){
+  const name=document.getElementById('cgName').value.trim(), icon=document.getElementById('cgIcon').value.trim();
+  const msg=t=>{ document.getElementById('cgMsg').textContent=t; };
+  if(!name) return msg('Ponle un nombre.');
+  const cg=catsEditable();
+  if(cg.some((x,i)=>i!==gi&&x.g===name)) return msg('Ya existe un grupo con ese nombre.');
+  snapshot();
+  if(gi<0) cg.push({g:name,icon:icon||'•',subs:['Otros ('+name+')']});
+  else { const g=cg[gi]; const old=g.g; if(icon) g.icon=icon;
+    if(name!==old){ g.g=name; renameCatRefs(old,name);
+      const oi=g.subs.indexOf('Otros ('+old+')'); if(oi>=0){ const nw='Otros ('+name+')'; g.subs[oi]=nw; renameCatRefs('Otros ('+old+')',nw); } } }
+  save(); openCats();
+}
+function delCatGroup(gi){
+  const cg=catsEditable(); const g=cg[gi]; if(g.subs.some(s=>PROTECTED_SUBS.includes(s)))return;
+  const mv=document.getElementById('cgMove');
+  snapshot(); if(mv) g.subs.forEach(s=>renameCatRefs(s,mv.value)); cg.splice(gi,1); save(); openCats();
+}
+function openBackup(){
+  sheet(`${backToAjustes}<h3>Respaldo y sincronización</h3>
+    <div class="ai-box" style="margin-bottom:14px;">
+      <label>📱 Sincronizar entre dispositivos</label>
+      <div class="tiny" style="margin-bottom:6px;">Pon el mismo código secreto en todos tus dispositivos (compu, cel, Safari y la app instalada) para que se sincronicen.</div>
+      <input id="syncCodeInput" value="${syncCode}" placeholder="tu código secreto (inventa uno largo)">
+      <div class="row" style="margin-top:8px;"><span class="tiny" id="syncMsg"></span><button class="btn sm" onclick="connectSync(document.getElementById('syncCodeInput').value)">Conectar</button></div>
     </div>
     <button class="btn" style="width:100%;margin-bottom:8px;" onclick="exportData()">⤓ Exportar archivo (.json)</button>
     <label class="btn ghost" style="width:100%;text-align:center;display:block;margin-bottom:14px;">⤒ Importar archivo<input type="file" accept="application/json" style="display:none" onchange="importData(event)"></label>
     <div class="field"><label>Código de respaldo (puente Cowork ↔ web)</label><textarea id="codeArea" rows="3" placeholder="Genera aquí tu código, o pega uno para importar"></textarea></div>
     <div class="row" style="gap:6px;margin-bottom:14px;"><button class="btn ghost sm" onclick="exportCode()">Generar</button><button class="btn ghost sm" onclick="copyCode()">Copiar</button><button class="btn sm" onclick="importCode()">Importar código</button></div>
     <button class="btn ghost sm" style="width:100%;color:var(--gasto);border-color:#eed;" onclick="resetAll()">Borrar todo y empezar de cero</button>`);
-  SCRIPTS.forEach(loadScript);
 }
 /* Scripts de Scriptable guardados en el repo. Se bajan al abrir Respaldo para poder copiarlos al instante
    (en iPhone el portapapeles solo funciona dentro del toque, no después de esperar una descarga). */
@@ -1407,7 +1578,7 @@ function papaMonthlySpend(){
   return mov+fix;
 }
 
-function render(){ renderDash(); renderResumen(); renderMov(); renderMeses(); renderPresu(); renderCalc(); renderEstados(); renderNotes(); renderDec(); if(document.getElementById('anaChips'))renderAnalisis(); }
+function render(){ applyCats(); renderDash(); renderResumen(); renderMov(); renderMeses(); renderPresu(); renderCalc(); renderEstados(); renderNotes(); renderDec(); if(document.getElementById('anaChips'))renderAnalisis(); }
 
 function addNote(){ const i=document.getElementById('noteInput'); const t=i.value.trim(); if(!t)return; S.notes.unshift({id:uid(),text:t,done:false}); i.value=''; save(); }
 function toggleNote(id){ const n=S.notes.find(x=>x.id===id); if(n){n.done=!n.done; save();} }
@@ -1454,15 +1625,78 @@ function renderCredito(){
   const msiItems=S.msi.filter(it=>cardIds.includes(it.card)&&(it.purchase||'')>=b.s&&(it.purchase||'')<=b.e);
   const meses=msiItems.reduce((a,it)=>a+(+it.total||0),0);
   const total=contado+meses;
-  const msiList=msiItems.length?msiItems.slice().sort((a,b2)=>(b2.purchase||'').localeCompare(a.purchase||'')).map(it=>`<div class="item"><div style="flex:1;min-width:0;"><div style="font-weight:500;">${it.producto||'Compra'}</div><div class="tiny">${it.card} · ${it.months||'?'} meses · ${fmt0(+it.monthly||0)}/mes</div></div><b style="color:var(--gasto);">${fmt0(+it.total||0)}</b></div>`).join(''):'<div class="tiny" style="padding:6px 0;">Sin compras a meses en el periodo.</div>';
+  const msiList=msiItems.length?msiItems.slice().sort((a,b2)=>(b2.purchase||'').localeCompare(a.purchase||'')).map(it=>`<div class="item"><div style="flex:1;min-width:0;"><div style="font-weight:500;">${it.producto||'Compra'}</div><div class="tiny">${it.card} · ${it.months||'?'} meses · ${fmt(+it.monthly||0)}/mes</div></div><b style="color:var(--gasto);">${fmt(+it.total||0)}</b></div>`).join(''):'<div class="tiny" style="padding:6px 0;">Sin compras a meses en el periodo.</div>';
   el.innerHTML=`
     <div class="seg" style="margin-bottom:10px;">
       <button class="${credWin==='mes'?'on':''}" onclick="credSet('mes')">Este mes</button>
       <button class="${credWin==='15d'?'on':''}" onclick="credSet('15d')">Últimos 15 días</button>
     </div>
-    <div class="hero" style="background:linear-gradient(135deg,#F2DBC6,#FBEFC9);margin-bottom:8px;"><div class="tiny" style="color:#8a5a3a;">total comprado a crédito</div><h2 style="color:#5a3720;">${fmt(total)}</h2><div style="display:flex;gap:16px;margin-top:5px;"><span class="tiny" style="color:#8a5a3a;">💵 contado <b style="color:#5a3720;">${fmt0(contado)}</b></span><span class="tiny" style="color:#8a5a3a;">📅 a meses <b style="color:#5a3720;">${fmt0(meses)}</b></span></div></div>
+    <div class="hero" style="background:linear-gradient(135deg,#F2DBC6,#FBEFC9);margin-bottom:8px;"><div class="tiny" style="color:#8a5a3a;">total comprado a crédito</div><h2 style="color:#5a3720;">${fmt(total)}</h2><div style="display:flex;gap:16px;margin-top:5px;"><span class="tiny" style="color:#8a5a3a;">💵 contado <b style="color:#5a3720;">${fmt(contado)}</b></span><span class="tiny" style="color:#8a5a3a;">📅 a meses <b style="color:#5a3720;">${fmt(meses)}</b></span></div></div>
     <details><summary style="cursor:pointer;font-weight:500;font-size:13px;color:var(--ink2);">Compras a meses del periodo (${msiItems.length})</summary><div style="margin-top:8px;">${msiList}</div></details>
     <div class="tiny" style="margin-top:8px;color:var(--ink3);">No se resta de tu dinero real · solo referencia de lo que compraste a crédito.</div>`;
+}
+/* ---------- 💳 Pago del mes: lo que hay que pagar para no generar intereses ----------
+   Estado de cuenta = el próximo cuyo día de pago todavía no pasa. Si hoy está entre el corte y el pago,
+   es el que ya cerró; si no, el que va corriendo.
+   Pago ideal = contado de ese corte + mensualidades que se cobran en ese pago + gastos fijos marcados enPago. */
+let pagoSel='all';
+function pagoSet(id){ pagoSel=id; renderPagoMes(); }
+function pagoStatement(c){
+  const cd=dayOf(c.corte), pd=dayOf(c.pago); if(!cd||!pd) return null;
+  const t=new Date(); t.setHours(0,0,0,0);
+  let C=new Date(t.getFullYear(),t.getMonth(),cd); if(t.getDate()<=cd) C=new Date(t.getFullYear(),t.getMonth()-1,cd); // último corte ya cerrado
+  let P=pagoForCorte(C,c);
+  if(t>P){ C=new Date(C.getFullYear(),C.getMonth()+1,cd); P=pagoForCorte(C,c); }
+  return {start:new Date(C.getFullYear(),C.getMonth()-1,cd), end:C, pago:P, closed:C<t};
+}
+function pagoMesCalc(c){
+  const st=pagoStatement(c); if(!st) return null;
+  const contMovs=S.movements.filter(m=>m.type==='gasto'&&m.wallet===c.id&&!m.msiId&&(()=>{const d=new Date(m.date+'T00:00');return d>st.start&&d<=st.end;})());
+  const cuotas=[];
+  S.msi.filter(it=>it.card===c.id&&it.months).forEach(it=>{
+    const s0=new Date((it.start||it.purchase||todayISO())+'T00:00');
+    for(let k=0;k<it.months;k++){ const d=new Date(s0.getFullYear(),s0.getMonth()+k,s0.getDate());
+      if(d.getFullYear()===st.pago.getFullYear()&&d.getMonth()===st.pago.getMonth()){ cuotas.push({it,k}); break; } }
+  });
+  const fijos=(S.fixed||[]).filter(f=>f.enPago&&f.source===c.id);
+  const contado=contMovs.reduce((a,m)=>a+m.amount,0);
+  const meses=cuotas.reduce((a,q)=>a+(+q.it.monthly||0),0);
+  const fijo=fijos.reduce((a,f)=>a+toMonthly(f.amount,f.freq),0);
+  return {c,st,contMovs,cuotas,fijos,contado,meses,fijo,total:contado+meses+fijo};
+}
+function renderPagoMes(){
+  const el=document.getElementById('dPagos'); if(!el)return;
+  const calcs=S.cards.map(pagoMesCalc).filter(Boolean).sort((a,b)=>a.st.pago-b.st.pago);
+  if(!calcs.length){ el.innerHTML='<div class="empty">Pon el día de corte y de pago de tus tarjetas para ver cuánto pagar.</div>'; return; }
+  if(pagoSel!=='all'&&!calcs.some(x=>x.c.id===pagoSel)) pagoSel='all';
+  const short=id=>id==='Plata Card'?'Plata':id;
+  const days=d=>{ const n=Math.round((d-new Date().setHours(0,0,0,0))/86400000); return n<0?'vencido':n===0?'hoy':'en '+n+' d'; };
+  const seg=`<div class="seg" style="margin-bottom:10px;"><button class="${pagoSel==='all'?'on':''}" onclick="pagoSet('all')">Todas</button>${calcs.map(x=>`<button class="${pagoSel===x.c.id?'on':''}" onclick="pagoSet('${x.c.id}')">${short(x.c.id)}</button>`).join('')}</div>`;
+  const heroStyle='background:linear-gradient(135deg,#F2DBC6,#FBEFC9);margin-bottom:8px;';
+  if(pagoSel==='all'){
+    const T=calcs.reduce((a,x)=>({contado:a.contado+x.contado,meses:a.meses+x.meses,fijo:a.fijo+x.fijo,total:a.total+x.total}),{contado:0,meses:0,fijo:0,total:0});
+    el.innerHTML=seg+`<div class="hero" style="${heroStyle}"><div class="tiny" style="color:#8a5a3a;">pago ideal (sin intereses)</div><h2 style="color:#5a3720;">${fmt(T.total)}</h2>
+      <div style="display:flex;gap:14px;flex-wrap:wrap;margin-top:5px;"><span class="tiny" style="color:#8a5a3a;">💵 contado <b style="color:#5a3720;">${fmt(T.contado)}</b></span><span class="tiny" style="color:#8a5a3a;">📅 meses <b style="color:#5a3720;">${fmt(T.meses)}</b></span>${T.fijo?`<span class="tiny" style="color:#8a5a3a;">🔁 fijos <b style="color:#5a3720;">${fmt(T.fijo)}</b></span>`:''}</div></div>`+
+      calcs.map(x=>{ const urgent=(x.st.pago-new Date().setHours(0,0,0,0))/86400000<=5;
+        return `<div class="item" style="cursor:pointer;" onclick="pagoSet('${x.c.id}')"><div class="dot" style="background:${x.c.color};">💳</div>
+        <div style="flex:1;min-width:0;"><div style="font-weight:500;">${x.c.id}</div><div class="tiny" style="color:var(--ink2);">paga ${niceDate(isoDate(x.st.pago))} · corte ${niceDate(isoDate(x.st.end))}</div></div>
+        <div style="text-align:right;"><b style="color:var(--gasto);">${fmt(x.total)}</b><div class="tiny" style="color:${urgent?'var(--gasto)':'var(--ink2)'};">${days(x.st.pago)}</div></div></div>`; }).join('');
+    return;
+  }
+  const x=calcs.find(y=>y.c.id===pagoSel); const c=x.c;
+  const lines=[
+    `<div class="item"><div style="flex:1;">💵 Contado del corte<div class="tiny">${x.contMovs.length} compra(s)</div></div><b>${fmt(x.contado)}</b></div>`,
+    `<div class="item"><div style="flex:1;">📅 Mensualidades<div class="tiny">${x.cuotas.length} compra(s) a meses</div></div><b>${fmt(x.meses)}</b></div>`,
+    ...x.fijos.map(f=>`<div class="item"><div style="flex:1;">🔁 ${f.name}<div class="tiny">gasto fijo</div></div><b>${fmt(toMonthly(f.amount,f.freq))}</b></div>`),
+    c.min>0?`<div class="item"><div style="flex:1;color:var(--ink2);">Mínimo del banco</div><span class="tiny">${fmt(c.min)}</span></div>`:'',
+    c.pni>0?`<div class="item"><div style="flex:1;color:var(--ink2);">Tu banco dice (no generar intereses)</div><span class="tiny">${fmt(c.pni)}</span></div>`:''
+  ].join('');
+  const detail=[...x.contMovs.slice().sort((a,b)=>(b.date||'').localeCompare(a.date||'')).map(m=>`<div class="item"><div style="flex:1;min-width:0;"><div style="font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${m.note||m.cat}</div><div class="tiny">contado · ${niceDate(m.date)}</div></div><b>${fmt(m.amount)}</b></div>`),
+    ...x.cuotas.map(q=>`<div class="item"><div style="flex:1;min-width:0;"><div style="font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${q.it.producto}</div><div class="tiny">mensualidad ${q.k+1} de ${q.it.months}</div></div><b>${fmt(+q.it.monthly||0)}</b></div>`)].join('');
+  el.innerHTML=seg+`<div class="hero" style="${heroStyle}"><div class="row"><span class="tiny" style="color:#8a5a3a;">pago ideal de ${c.id}</span><span class="tiny" style="color:#8a5a3a;">paga <b>${niceDate(isoDate(x.st.pago))}</b> · ${days(x.st.pago)}</span></div>
+      <h2 style="color:#5a3720;">${fmt(x.total)}</h2><div class="tiny" style="color:#8a5a3a;">corte ${niceDate(isoDate(x.st.start))} → ${niceDate(isoDate(x.st.end))}${x.st.closed?' · ya cerró':' · va corriendo'}</div></div>
+    ${lines}
+    <details style="margin-top:6px;"><summary class="tiny" style="cursor:pointer;color:var(--ink2);">Ver compras de este corte</summary><div style="margin-top:4px;">${detail||'<div class="tiny" style="padding:6px 0;">Nada en este corte.</div>'}</div></details>`;
 }
 const CARD_INK={'Klar':'#7a4a32','Liverpool':'#6a4460','Plata Card':'#3f5670'};
 function renderDisponible(){
@@ -1506,21 +1740,7 @@ function renderDash(){
     de.innerHTML=`<div class="row"><div><b style="color:#7a4a32;">↩ Me deben</b><div class="tiny" style="color:#8a6a52;">${sub?sub+' · ':''}toca para ver</div></div><b style="color:#7a4a32;">${fmt0(totalFalta)}</b></div>`; }
   else de.style.display='none';
 
-  // próximos pagos: lo que toca pagar ESTE MES por tarjeta = suma de mensualidades (no el total)
-  const pEl=document.getElementById('dPagos');
-  let html='';
-  const cards=S.cards.slice().sort((a,b)=>nextDateOf(a.pago)-nextDateOf(b.pago));
-  cards.forEach(c=>{
-    const pni=pagoNoIntereses(c); const dd=cardDebt(c);
-    if(!c.pago && !cardMonthly(c.id) && !dd) return;
-    const d=daysTo(c.pago); const urgent=d!==null&&d<=5;
-    html+=`<div class="item"><div class="dot" style="background:${c.color};">💳</div>
-      <div style="flex:1;"><div style="font-weight:500;">${c.id}</div>
-      <div class="tiny" style="color:var(--ink);">${c.pago?('Pago '+dayLabel(c.pago)):'sin fecha'}${c.corte?(' · corte '+dayLabel(c.corte)):''} · debes ${fmt0(dd)}</div></div>
-      <div style="text-align:right;"><div class="tiny" style="color:var(--ink2);">${c.pni>0?'pago no interés':'MSI + contado'}</div><b style="color:var(--gasto);">${fmt0(pni)}</b>
-      ${c.pago?`<div class="tiny" style="color:${urgent?'var(--gasto)':'var(--ink2)'};">${d<0?'vencido':d===0?'hoy':'en '+d+' d'}</div>`:''}</div></div>`;
-  });
-  pEl.innerHTML = html || '<div class="empty">Configura tus tarjetas y compras a meses para ver lo que pagas cada mes.</div>';
+  renderPagoMes();
 
   document.getElementById('dCats').innerHTML=catBreakdownHTML(realMovs().filter(m=>m.type==='gasto'&&!m.msiId));
 }
@@ -1611,7 +1831,7 @@ function renderMeses(){
   const mensualTot=actAll.reduce((a,m)=>a+m.monthly,0);
   let deudaTot; if(mesesCard==='all') deudaTot=S.cards.reduce((a,c)=>a+cardDebt(c),0);
     else if(mesesCard===S.papa.id) deudaTot=null; else { const cc=S.cards.find(x=>x.id===mesesCard); deudaTot=cc?cardDebt(cc):null; }
-  document.getElementById('mesesTotals').innerHTML=`<div class="row"><div><div class="tiny">Mensualidades activas</div><b>${fmt0(mensualTot)}/mes</b></div><div style="text-align:right;"><div class="tiny">Deuda total${mesesCard==='all'?' (todas)':''}</div><b>${deudaTot==null?'—':fmt0(deudaTot)}</b></div></div>`;
+  document.getElementById('mesesTotals').innerHTML=`<div class="row"><div><div class="tiny">Mensualidades activas</div><b>${fmt(mensualTot)}/mes</b></div><div style="text-align:right;"><div class="tiny">Deuda total${mesesCard==='all'?' (todas)':''}</div><b>${deudaTot==null?'—':fmt(deudaTot)}</b></div></div>`;
   const payCards=S.cards.filter(c=>scope(c.id)&&S.msi.some(m=>m.card===c.id&&m.paid<m.months));
   document.getElementById('msiPayBtns').innerHTML=payCards.map(c=>`<button class="btn" style="width:100%;margin-bottom:6px;background:${c.color};color:#5a3a28;" onclick="payCard('${c.id}')">✓ Pagué ${c.id} — avanzar sus mensualidades +1</button>`).join('');
   // timeline
@@ -1630,7 +1850,7 @@ function renderMeses(){
   else tlEl.innerHTML=keys.slice(0,8).map(k=>{const[y,mo]=k.split('-');return`
     <div class="timeline-row"><span class="m">${MONTHS[+mo]} ${String(y).slice(2)}</span>
     <div class="tlbar"><span style="width:${Math.round(tl[k]/max*100)}%;"></span></div>
-    <b style="font-size:12px;width:64px;text-align:right;">${fmt0(tl[k])}</b></div>`;}).join('');
+    <b style="font-size:12px;width:78px;text-align:right;">${fmt(tl[k])}</b></div>`;}).join('');
 
   const allMsi=[...S.msi,...S.papa.msi].filter(m=>scope(m.card)).sort((a,b)=>(b.purchase||b.start||'').localeCompare(a.purchase||a.start||''));
   const el=document.getElementById('msiList');
@@ -1654,10 +1874,13 @@ function renderMeses(){
       chip(m.card, cardColor[m.card]||'#F3ECE1', cardInk[m.card]||'#5F5E5A'),
       chip(m.interes==='sin'?'Sin intereses':'Con intereses', m.interes==='sin'?'#C0DD97':'#FBC775', m.interes==='sin'?'#27500A':'#633806'),
       progChip(m.paid,m.months),
-      chip(`${fmt0(m.monthly)}/mes`, '#F1EFE8', '#444441')
+      chip(`${fmt(m.monthly)}/mes`, '#F1EFE8', '#444441')
     ].join('');
+    const totalPagar=(+m.monthly||0)*(+m.months||0);
+    const conInt=m.interes==='con' && m.total && Math.abs(totalPagar-m.total)>0.05;
     return `<div class="card" ${isPapa?'style="border-style:dashed;"':''}>
-      <div class="row"><b>${m.producto}</b></div>
+      <div class="row" style="align-items:flex-start;"><b style="min-width:0;">${m.producto}</b>
+        <div style="text-align:right;flex:none;"><b>${m.total?fmt(m.total):fmt(totalPagar)}</b>${conInt?`<div class="tiny">pagas ${fmt(totalPagar)}</div>`:''}</div></div>
       <div class="tiny" style="margin-top:2px;">1er cobro ${niceDate(m.start)}${m.purchase?(' · compra '+niceDate(m.purchase)):''}</div>
       <div class="mtags">${tags}</div>
       <div class="bar" style="margin-top:8px;"><span style="width:${Math.round(m.paid/m.months*100)}%;background:linear-gradient(90deg,#DCE8C8,#8AA06B);"></span></div>
@@ -1669,7 +1892,7 @@ function renderMeses(){
     </div>`;
   };
   const contBlock=(m)=>`<div class="card">
-      <div class="row"><b>${m.note||m.cat}</b><b style="color:var(--gasto);">${fmt0(m.amount)}</b></div>
+      <div class="row"><b>${m.note||m.cat}</b><b style="color:var(--gasto);">${fmt(m.amount)}</b></div>
       <div class="mtags">
         ${chip(m.wallet, cardColor[m.wallet]||'#F3ECE1', cardInk[m.wallet]||'#5F5E5A')}
         ${chip('de contado','#D6E6FA','#0C447C')}
