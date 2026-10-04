@@ -535,11 +535,12 @@ function openMov(pre){
     <div class="field" id="mWalletWrap"><label id="mWalletLbl">Cartera</label><select id="mWallet">${walletOptions(pre.wallet,true)}</select></div>
     <div class="field hidden" id="mToWrap"><label>Hacia</label><select id="mTo">${walletOptions(pre.to||'',true)}</select></div>
     <div class="field" id="mCatWrap"><label>Categoría</label><div class="grid2">
-      <select id="mGroup" onchange="fillSubs('mGroup','mCat')">${groupOptions(groupOf(pre.cat||'Otros'))}</select>
-      <select id="mCat">${subOptionsFor(groupOf(pre.cat||'Otros'),pre.cat)}</select></div></div>
+      <select id="mGroup" onchange="fillSubs('mGroup','mCat');syncRepIng()">${groupOptions(groupOf(pre.cat||'Otros'))}</select>
+      <select id="mCat" onchange="syncRepIng()">${subOptionsFor(groupOf(pre.cat||'Otros'),pre.cat)}</select></div></div>
     <div class="field hidden" id="mMesesWrap"><label style="display:flex;align-items:center;gap:8px;cursor:pointer;"><input type="checkbox" id="mMeses" style="width:auto;"> Es compra a meses (MSI) — llenarás los datos después</label></div>
     <div class="field hidden" id="mReponerWrap"><label style="display:flex;align-items:center;gap:8px;cursor:pointer;"><input type="checkbox" id="mReponer" style="width:auto;" ${pre.reponer?'checked':''}> ↩ Me lo reponen mis papás</label></div>
     <div class="field hidden" id="mSalaryWrap"><label style="display:flex;align-items:center;gap:8px;cursor:pointer;"><input type="checkbox" id="mSalary" style="width:auto;" ${pre.salary?'checked':''}> Es mi quincena / sueldo</label></div>
+    <div class="field hidden" id="mRepIngWrap"><label style="display:flex;align-items:center;gap:8px;cursor:pointer;"><input type="checkbox" id="mRepIng" style="width:auto;" onchange="repIngToggle(this.checked)" ${pre.cat==='Reposición'?'checked':''}> ↩ Es reposición de mis papás</label></div>
     <div class="field"><label>Nota / razón</label><input id="mNote" value="${(pre.note||'').replace(/"/g,'&quot;')}" placeholder="opcional"></div>
     <div class="field"><label>Fecha</label><input id="mDate" type="date" value="${todayISO()}"></div>
     <div class="row" style="margin-top:6px;"><button class="btn ghost" onclick="closeSheet()">Cancelar</button><button class="btn" onclick="saveMov()">Guardar</button></div>`);
@@ -551,10 +552,18 @@ function setMt(t){
   document.getElementById('mToWrap').classList.toggle('hidden',t!=='transfer');
   document.getElementById('mCatWrap').classList.toggle('hidden',t==='transfer');
   const sw=document.getElementById('mSalaryWrap'); if(sw)sw.classList.toggle('hidden',t!=='ingreso');
+  const ri=document.getElementById('mRepIngWrap'); if(ri)ri.classList.toggle('hidden',t!=='ingreso');
   const mw=document.getElementById('mMesesWrap'); if(mw)mw.classList.toggle('hidden',t!=='gasto');
   const rw=document.getElementById('mReponerWrap'); if(rw)rw.classList.toggle('hidden',t!=='gasto');
   document.getElementById('mWalletLbl').textContent = t==='transfer'?'Desde':(t==='ingreso'?'A cartera':'Cartera');
 }
+// Casilla "Es reposición" de los ingresos: solo es un atajo a la categoría Dinero y otros → Reposición (lo que guarda es la categoría)
+function repIngToggle(on){
+  const g=document.getElementById('mGroup'), c=document.getElementById('mCat');
+  if(on){ g.value=groupOf('Reposición'); fillSubs('mGroup','mCat'); c.value='Reposición'; }
+  else if(c.value==='Reposición'){ c.value='Otros'; }
+}
+function syncRepIng(){ const b=document.getElementById('mRepIng'); if(b) b.checked=document.getElementById('mCat').value==='Reposición'; }
 function applyDelta(id,d){
   let w=S.wallets.find(x=>x.id===id); if(w){w.bal+=d;return;}
   // Las tarjetas de crédito ya NO guardan deuda fija: se calcula sola desde los movimientos (ver cardDebt).
@@ -595,10 +604,11 @@ function editMov(id){
     <div class="field" id="mWalletWrap"><label id="mWalletLbl">Cartera</label><select id="mWallet">${walletOptions(m.wallet,true)}</select></div>
     <div class="field hidden" id="mToWrap"><label>Hacia</label><select id="mTo">${walletOptions(m.to||'',true)}</select></div>
     <div class="field" id="mCatWrap"><label>Categoría</label><div class="grid2">
-      <select id="mGroup" onchange="fillSubs('mGroup','mCat')">${groupOptions(groupOf(m.cat||'Otros'))}</select>
-      <select id="mCat">${subOptionsFor(groupOf(m.cat||'Otros'),m.cat)}</select></div></div>
+      <select id="mGroup" onchange="fillSubs('mGroup','mCat');syncRepIng()">${groupOptions(groupOf(m.cat||'Otros'))}</select>
+      <select id="mCat" onchange="syncRepIng()">${subOptionsFor(groupOf(m.cat||'Otros'),m.cat)}</select></div></div>
     <div class="field hidden" id="mReponerWrap"><label style="display:flex;align-items:center;gap:8px;cursor:pointer;"><input type="checkbox" id="mReponer" style="width:auto;" ${m.reponer?'checked':''}> ↩ Me lo reponen mis papás</label></div>
     <div class="field hidden" id="mSalaryWrap"><label style="display:flex;align-items:center;gap:8px;cursor:pointer;"><input type="checkbox" id="mSalary" style="width:auto;" ${m.salary?'checked':''}> Es mi quincena / sueldo</label></div>
+    <div class="field hidden" id="mRepIngWrap"><label style="display:flex;align-items:center;gap:8px;cursor:pointer;"><input type="checkbox" id="mRepIng" style="width:auto;" onchange="repIngToggle(this.checked)" ${m.cat==='Reposición'?'checked':''}> ↩ Es reposición de mis papás</label></div>
     <div class="field"><label>Nota / razón</label><input id="mNote" value="${(m.note||'').replace(/"/g,'&quot;')}"></div>
     <div class="field"><label>Fecha</label><input id="mDate" type="date" value="${m.date}"></div>
     ${m.type==='gasto' ? (m.msiId ? `<button class="btn ghost" style="width:100%;margin-bottom:8px;" onclick="movToContado('${id}')">↩ Es de contado (sacar de meses)</button>` : `<button class="btn ghost" style="width:100%;margin-bottom:8px;" onclick="movToMeses('${id}')">📅 Convertir a compra a meses</button>`) : ''}
