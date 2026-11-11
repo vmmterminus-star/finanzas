@@ -1656,7 +1656,7 @@ function pagoMesCalc(c){
   S.msi.filter(it=>it.card===c.id&&it.months).forEach(it=>{
     const s0=new Date((it.start||it.purchase||todayISO())+'T00:00');
     for(let k=0;k<it.months;k++){ const d=new Date(s0.getFullYear(),s0.getMonth()+k,s0.getDate());
-      if(d.getFullYear()===st.pago.getFullYear()&&d.getMonth()===st.pago.getMonth()){ cuotas.push({it,k}); break; } }
+      if(d.getFullYear()===st.pago.getFullYear()&&d.getMonth()===st.pago.getMonth()){ if(k>=(+it.paid||0)) cuotas.push({it,k}); break; } }
   });
   const fijos=(S.fixed||[]).filter(f=>f.enPago&&f.source===c.id);
   const contado=contMovs.reduce((a,m)=>a+m.amount,0);
